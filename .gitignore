@@ -1,0 +1,8 @@
+# Ignore any .Rdata present in the folder
+*.RData
+.Rhistory
+# Ignore any VennDiagram log.
+Venn.*.log
+# Ignore any hidden folder used for caching
+_main_files
+_main_cache

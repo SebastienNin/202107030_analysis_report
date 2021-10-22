@@ -1,0 +1,77 @@
+---
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+# Data analysis
+
+Data were processed using a custom Snakemake workflow.
+
+Here is the dag of the workflow. The rule *all* contain path to the target needed to complete the workflow. This workflow is executed for each sample. An R script is then used to perform statistical analysis and to draw plots.
+
+![](/mnt/sacapus/reads/analysis_results/202107030/out/snakemake/dag.png)
+
+```{r loading_data}
+# Reads xlsx file containing control sequence names
+# control_table <- read.xlsx("/mnt/sacapus/reads/analysis_results/202107030/scores_bioinfo_controles_positif_MPRA_2020.xlsx", sheetIndex = 1)
+control_table <- read.xlsx("/data/nin/Workspace/Runs/Run_384/scores_bioinfo_controles_positif_MPRA_2020.xlsx", sheetIndex = 1)
+
+# reference_name <- read.table(pipe("grep '>' /mnt/sacapus/reads/analysis_results/202107030/MPRAsequence_no_adaptateur-Final.fa | sed 's/>//g'"))[,1]
+reference_name <- read.table(pipe("grep '>' /data/nin/Workspace/Runs/Run_384/MPRAsequence_no_adaptateur-Final.fa | sed 's/>//g'"))[, 1]
+
+# nb_sample <- length(dir(path = "/mnt/sacapus/reads/analysis_results/202107030/out/count_reads/"))
+nb_sample <- length(dir(path = "/data/nin/Workspace/Runs/Run_384/out/count_reads/"))
+sample_name <- c()
+# sample_path <- gsub(pattern = ".*/count_quality_reads/",
+#                     replacement = "",
+#                     x = Sys.glob("/mnt/sacapus/reads/analysis_results/202107030/out/count_quality_reads/*/*"))
+
+# sample_path <- Sys.glob("/mnt/sacapus/reads/analysis_results/202107030/out/count_reads/*/*")
+sample_path <- Sys.glob("/data/nin/Workspace/Runs/Run_384/out/count_reads/*/*")
+
+# sample_names_tmp <- basename(Sys.glob("/mnt/sacapus/reads/analysis_results/202107030/out/count_reads/*/*"))
+sample_names_tmp <- basename(Sys.glob("/data/nin/Workspace/Runs/Run_384/out/count_reads/*/*"))
+# sample_name <- sample_name_tmp
+# names(sample_name) <- basename(Sys.glob("/mnt/sacapus/reads/analysis_results/202107030/out/count_quality_reads/*"))
+sample_names_tmp2 <- gsub(pattern = "^.*?_", replacement = "", x = sample_names_tmp)
+sample_names <- gsub(pattern = "_S\\d+.txt$", replacement = "", x = sample_names_tmp2, perl = T)
+```
+
+```{r filling_matrix}
+count_matrix <- matrix(data = NA, nrow = length(reference_name), ncol = nb_sample)
+
+rownames(count_matrix) <- reference_name
+colnames(count_matrix) <- sample_names
+
+# Fill the count matrix with proper values
+for (i in sample_path) {
+  tmp <- read.table(i, sep = "\t", header = FALSE, row.names = 1, quote = "")
+  current_sample_name_tmp <- gsub(pattern = "^.*?_", replacement = "", x = basename(i))
+  current_sample_name <- gsub(pattern = "_S\\d+.txt$", replacement = "", x = current_sample_name_tmp, perl = T)
+  count_matrix[, current_sample_name] <- tmp[rownames(count_matrix), ]
+}
+
+# Replace D G and M from reference name by Right Left and Middle respectively. This can be added to the worklow lately
+rownames(count_matrix) <- gsub(pattern = "-G-", replacement = "-Left-", rownames(count_matrix))
+rownames(count_matrix) <- gsub(pattern = "-D-", replacement = "-Right-", rownames(count_matrix))
+rownames(count_matrix) <- gsub(pattern = "-M-", replacement = "-Middle-", rownames(count_matrix))
+# Remove two sequences from the matrix because I don't have the REF or ALT equivalent
+count_matrix <- count_matrix[-grep("rs146873730", rownames(count_matrix)), ]
+count_matrix <- count_matrix[-grep("rs77713868", rownames(count_matrix)), ]
+# Replace NA by 0
+count_matrix[is.na(count_matrix)] <- 0
+count_matrix <- count_matrix + 1
+# Get name order for later
+colnames_order_cDNA <- colnames(count_matrix)[1:4]
+colnames_order_gDNA <- gsub(pattern = "cDNA", replacement = "ADNg", x = colnames_order_cDNA)
+# Create sub matrices for cDNA and gDNA
+cDNA_matrix <- count_matrix[, colnames_order_cDNA]
+gDNA_matrix <- count_matrix[, colnames_order_gDNA]
+# As the number of REF and ALT sequences are different,
+# we need to ensure that we process the sequences that are present in ALT and REF
+Ref_names <- rownames(count_matrix)[grep("REF", rownames(count_matrix))]
+Alt_names <- rownames(count_matrix)[grep("ALT", rownames(count_matrix))]
+```
+
+

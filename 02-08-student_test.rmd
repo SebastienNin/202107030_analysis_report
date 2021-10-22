@@ -1,0 +1,107 @@
+---
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+## Student t-test
+
+We perform a paired two sided t-test on each sequence to see if there is the mean expression of the ALT and REF sequence are different.
+
+Before performing the t-test, we normalized count using TMM method implemented in edgeR package.
+
+For example, we can compute for rs79227574-ALT-Middle-1 and rs79227574-REF-Middle-1 if there mean expression in both replicate are different.
+
+```{r}
+# Function to run two sided t test on two vectors. Return NA is the results can't be run (i.e Ratio for condition have null deviation)
+# this function take a matrix as input and an index or rowname for compared contidions. 
+student_test_rs_vs_not_rs <- function(input_matrix, cond1, cond2){
+  try_student_results_pval <- try(t.test(x = input_matrix[cond1, ], 
+                                         y = input_matrix[cond2, ],
+                                         paired = T, alternative = "two.sided")$p.value, silent = T)
+  try_student_results_estimate <- try(t.test(x = input_matrix[cond1, ], 
+                                      y = input_matrix[cond2, ],
+                                      paired = T, alternative = "two.sided")$estimate, silent = T)
+  if(grepl(pattern = "Error", x = try_student_results_pval) | grepl(pattern = "Error", x = try_student_results_estimate)){
+    student_results_pval <- NA
+    student_results_estimate <- NA
+  }else{
+    student_results_pval <- try_student_results_pval
+    student_results_estimate <- try_student_results_estimate
+  }
+  return(list(pval = student_results_pval, estimate = student_results_estimate))
+}
+```
+
+```{r}
+# Normalize data using TMM method
+scale.factors <- calcNormFactors(count_matrix,lib.size=NULL, method = "TMM")
+lib.size <- colSums(count_matrix)
+norm.data <- t(t(count_matrix)/(scale.factors*lib.size))
+
+cDNA_matrix_norm <- count_matrix[,grep("cDNA", colnames(count_matrix))]
+gDNA_matrix_norm <- count_matrix[,grep("ADNg", colnames(count_matrix))]
+# Prepare data for t-test on ALT/REF
+ratio <- (cDNA_matrix_norm+1)/(gDNA_matrix_norm+1)
+ratio_matrix <- log2(ratio)
+colnames(ratio_matrix) <- gsub(pattern = "_cDNA|_ADNg", replacement = "", x = colnames(ratio_matrix))
+
+# loop on condition
+condition <- c("101_replicat", "HSO_replicat")
+
+alt_rs_name <- rownames(ratio_matrix[grep("ALT", rownames(ratio_matrix)),])
+# for(cond in condition){
+#   cond_ratio_matrix <- ratio_matrix[,grep(pattern = cond, x = colnames(ratio_matrix))]
+#   for(rs_name in alt_rs_name){
+#     rs_name_unique <- gsub(pattern = "ALT-", replacement = "", x = rs_name)
+#     student_results <- t.test(x = cond_ratio_matrix[rs_name, ], 
+#                               y = cond_ratio_matrix[gsub(pattern = "ALT", replacement = "REF", x = rs_name), ],
+#                               paired = T, alternative = "two.sided")
+#     ttest_results_matrix[rs_name_unique, "student_t_value"] <- student_results$statistic
+#     ttest_results_matrix[rs_name_unique, "student_p_value"] <- student_results$p.value
+#   }
+# }
+
+# ttest_results_matrix <- matrix(data = NA, nrow = dim(count_matrix[grep("ALT", rownames(count_matrix)),]), ncol = 2)
+# rownames(ttest_results_matrix) <- gsub(pattern = "ALT-", replacement = "",
+#                                        rownames(count_matrix[grep("ALT", rownames(count_matrix)),]))
+# colnames(ttest_results_matrix) <- c("student_t_value", "student_p_value")
+
+ttest_results_matrix <- matrix(data = NA, nrow = nrow(count_matrix), ncol = 2)
+rownames(ttest_results_matrix) <- rownames(count_matrix)
+colnames(ttest_results_matrix) <- c("student_estimate_value", "student_p_value")
+
+for(Alt in 1:3){
+  
+  grep_ref = paste0("-", Alt)
+  
+  Alt_names_loop <- Alt_names[grep(grep_ref, Alt_names)]
+  Ref_names_loop <- gsub(pattern = grep_ref, replacement = "-1",
+                         x = gsub(pattern = "ALT", replacement = "REF", x = Alt_names_loop))
+  
+  alt_rs_name <- rownames(ratio_matrix[grep("ALT", rownames(ratio_matrix)),])
+  for(cond in condition){
+    cond_ratio_matrix <- ratio_matrix[,grep(pattern = cond, x = colnames(ratio_matrix))]
+    # Loop to create contingency table and run the fischer test
+    for(rs_name_index in 1:length(Alt_names_loop)){
+      rs_name <- gsub(pattern = "-ALT", replacement = "", Alt_names_loop[rs_name_index])
+      alt_name_loop <- Alt_names_loop[rs_name_index]
+      ref_name_loop <- Ref_names_loop[rs_name_index]
+      student_test_results <- student_test_rs_vs_not_rs(input_matrix = cond_ratio_matrix, cond1 = alt_name_loop, cond2 = ref_name_loop)
+      ttest_results_matrix[alt_name_loop, "student_estimate_value"] <- student_test_results$estimate
+      ttest_results_matrix[alt_name_loop, "student_p_value"] <- student_test_results$pval
+      ttest_results_matrix[ref_name_loop, "student_estimate_value"] <- student_test_results$estimate
+      ttest_results_matrix[ref_name_loop, "student_p_value"] <- student_test_results$pval
+    }
+  }
+}
+```
+
+```{r}
+ttest_results_matrix_for_plot <- as.data.frame(ttest_results_matrix)
+
+ttest_results_matrix_for_plot$location <-  gsub(pattern = "rs[0-9]*-|(ALT|REF)-|-[123]", replacement = "", x = rownames(ttest_results_matrix_for_plot))
+ttest_results_matrix_for_plot$allele <-  gsub(pattern = "rs[0-9]*-|-(Left|Middle|Right)|-123", replacement = "", x = rownames(ttest_results_matrix_for_plot))
+ggplot(ttest_results_matrix_for_plot, aes(x = student_estimate_value, y = -log10(student_p_value), color = location)) + geom_point()+ facet_wrap(~ location)
+ggplot(ttest_results_matrix_for_plot, aes(x = student_estimate_value, y = -log10(student_p_value), color = allele)) + geom_point() + facet_wrap(~ allele)
+```

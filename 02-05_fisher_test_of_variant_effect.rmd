@@ -1,0 +1,361 @@
+---
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+## Fisher test to mesure the influence of ALT allele versus REF allele on cDNA and gDNA expression level
+
+On the following analysis, we focused on measuring the effect of the ALT allele versus the REF allele on transcription. For this analysis, the counts of each sequence will be summed independently of the location (Left, Middle, Right).
+
+So for each unique sequence, we will have a sum of counts for ALT allele and REF allele, for both cDNa and gDNA conditions.
+
+This was perform by creating a contingency matrix of the count of the ALT and the REF allele in the cDNA and the gDNA sample. Contingency matrices look like the following:
+
+|     | cDNA | gDNA |
+|-----|------|------|
+| rs9999446-ALT-1 | 1564   | 624 |
+| rs9999446-REF-1 | 1190   | 400 |
+
+This example is for the comparison of rs9999446-1 and rs9999446-REF-1 for sample 101_replicat_1.
+
+```{r}
+# Function to create contingency matrix to perform fisher test
+create_cont_matrix_and_run_fisher_test_variant_vs_ref_no_location <- function(sequence_name, samplename, count_mat){
+  ref_sequence <- gsub(pattern = "ALT", replacement = "REF", x = sequence_name)
+  alt_sequence_count_matrix <- count_mat[grep(pattern = sequence_name, 
+                                              x = gsub(pattern = "-Left|-Middle|-Right", 
+                                                       replacement = "", x = rownames(count_mat))),]
+  ref_sequence_count_matrix <- count_mat[grep(pattern = ref_sequence, 
+                                              x = gsub(pattern = "-Left|-Middle|-Right", 
+                                                       replacement = "", x = rownames(count_mat))),]   
+  summed_alt_sequence_count_matrix <- colSums(alt_sequence_count_matrix)
+  summed_ref_sequence_count_matrix <- colSums(ref_sequence_count_matrix)
+  
+  rbind(sequence = summed_alt_sequence_count_matrix, ref_sequence = summed_ref_sequence_count_matrix)
+  # sequence_name_ref_tmp <- gsub(pattern = "ALT", replacement = "REF", x = sequence_name)
+  # Change the number at the end of the sequence by -1 to get the REF number.
+  # sequence_name_ref <- gsub(pattern = "-2|-3", replacement = "-1", x = sequence_name_ref_tmp)  
+  cont_matrix <- matrix(data = NA, nrow = 2, ncol = 2)
+  rownames(cont_matrix) <- c("Alt", "Ref")
+  colnames(cont_matrix) <- c("cDNA", "gDNA")
+  cont_matrix["Alt", "cDNA"] <- summed_alt_sequence_count_matrix[samplename]
+  cont_matrix["Ref", "cDNA"] <- summed_ref_sequence_count_matrix[samplename]
+  cont_matrix["Alt", "gDNA"] <- summed_alt_sequence_count_matrix[gsub(pattern = "cDNA", replacement = "ADNg", x = samplename)]
+  cont_matrix["Ref", "gDNA"] <- summed_ref_sequence_count_matrix[gsub(pattern = "cDNA", replacement = "ADNg", x = samplename)]
+  # Make on fisher test and extract value
+  fisher_test <- fisher.test(x = cont_matrix, alternative = "two.sided")
+  ficher_test_pval <- fisher_test$p.value
+  ficher_test_oddratio <- fisher_test$estimate
+  # fisher_results[sequence_name, gsub(pattern = "_cDNA", replacement = "", 
+  # x = samplename)] <- fisher_test$p.value
+  # fisher_odd_ratio[sequence_name, gsub(pattern = "_cDNA", replacement = "", 
+  # x = samplename)] <- fisher_test$estimate 
+  return(list(pval = ficher_test_pval, oddratio = ficher_test_oddratio))
+}
+```
+
+```{r statistical_tests_no_location}
+# Prepare the result table
+rs_unique_names <- unique(gsub(pattern = "-Left|-Middle|-Right", replacement = "", x = rownames(count_matrix)))
+rs_unique_names_for_table <- unique(gsub(pattern = "ALT-|REF-", replacement = "", x = rs_unique_names))
+fisher_results_no_location <- matrix(data = NA, nrow = length(rs_unique_names_for_table), ncol = length(colnames_order_cDNA))
+rownames(fisher_results_no_location) <- rs_unique_names_for_table
+colnames(fisher_results_no_location) <- gsub(pattern = "cDNA_", replacement = "", x = colnames_order_cDNA)
+# fisher_odd_ratio <- matrix(data = NA, nrow = length(rs_unique_names), ncol = length(colnames_order_cDNA))
+fisher_odd_ratio_no_location <- fisher_results_no_location
+
+rs_unique_alt_names <- rs_unique_names[grep(pattern = "ALT", x = rs_unique_names)]
+# Loop over the number of possible variant for the same sequence
+for(Alt in 1:3){
+  # Get the number of the variant
+  grep_ref = paste0("-", Alt)
+  # 
+  Alt_names_loop <- rs_unique_alt_names[grep(grep_ref, rs_unique_alt_names)]
+  Ref_names_loop <- gsub(pattern = grep_ref, replacement = "-1",
+                         x = gsub(pattern = "ALT", replacement = "REF", x = Alt_names_loop))
+  
+  # Alt_cDNA_matrix_loop <- count_matrix[Alt_names_loop, colnames_order_cDNA]
+  # Ref_cDNA_matrix_loop <- count_matrix[Ref_names_loop, colnames_order_cDNA]
+  # Alt_gDNA_matrix_loop <- count_matrix[Alt_names_loop, colnames_order_gDNA]
+  # Ref_gDNA_matrix_loop <- count_matrix[Ref_names_loop, colnames_order_gDNA]
+  
+  # Loop to create contingency table and run the fischer test
+  for(sample in colnames_order_cDNA){
+    for(sequence in rs_unique_alt_names){
+      # rs_name <- gsub(pattern = "-ALT", replacement = "", rownames(Alt_cDNA_matrix_loop)[i])
+      fisher_test_loop <- create_cont_matrix_and_run_fisher_test_variant_vs_ref_no_location(sequence_name = sequence, samplename = sample, count_mat = count_matrix)
+      fisher_results_no_location[gsub(pattern = "ALT-", replacement = "", x = sequence),
+                                 gsub(pattern = "_cDNA", replacement = "", x = sample)] <-fisher_test_loop$pval
+      fisher_odd_ratio_no_location[gsub(pattern = "ALT-", replacement = "", x = sequence),
+                                   gsub(pattern = "_cDNA", replacement = "", x = sample)] <- fisher_test_loop$oddratio
+      # cont_matrix <- matrix(data = NA, nrow = 2, ncol = 2)
+      # rownames(cont_matrix) <- c("Alt", "Ref")
+      # colnames(cont_matrix) <- c("cDNA", "gDNA")
+      # Alt_cDNA <- Alt_cDNA_matrix_loop[i, sample]
+      # Ref_cDNA <- Ref_cDNA_matrix_loop[i, sample]
+      # Alt_gDNA <- Alt_gDNA_matrix_loop[i, gsub(pattern = "cDNA", replacement = "ADNg", x = sample)]
+      # Ref_gDNA <- Ref_gDNA_matrix_loop[i, gsub(pattern = "cDNA", replacement = "ADNg", x = sample)]
+      # # Fill the Ref-cDNA case
+      # cont_matrix[1,1] <- Alt_cDNA
+      # # Fill the Alt-cDNA case
+      # cont_matrix[2,1] <- Ref_cDNA
+      # # Fill the Ref_gDNA case
+      # cont_matrix[1,2] <- Alt_gDNA
+      # # Fill the Alt gDNA case
+      # cont_matrix[2,2] <- Ref_gDNA
+      # # Make on fisher test and extract value
+      # fisher_test <- fisher.test(x = t(cont_matrix), alternative = "two.sided")
+      # fisher_results[rs_name, gsub(pattern = "_cDNA", replacement = "", 
+      #                              x = sample)] <- fisher_test$p.value
+      # fisher_odd_ratio[rs_name, gsub(pattern = "_cDNA", replacement = "", 
+      #                                x = sample)] <- fisher_test$estimate      
+      # hypergeom_results[rs_name, gsub(pattern = "_cDNA", replacement = "", 
+      #                                 x = sample)] <- phyper(q = Alt_cDNA - 1,
+      #                                                        m = sum(Alt_cDNA, Alt_gDNA),
+      #                                                        n = sum(Ref_cDNA, Ref_gDNA),
+      #                                                        k = sum(Ref_cDNA, Alt_cDNA),
+      #                                                        lower.tail = F)
+    }
+  }
+}
+
+# pairs(fisher_results, lower.panel = dens_plotFun, upper.panel = NULL, main = "Fisher test p-value for each condition")
+```
+
+After performing the all the Fisher tests, we can draw the following plot.
+
+On this plot, the lower triangle contains scatter plot of -log10(p-value) paired by samples. The diagonal represent the distribution of the -log10(p-value) and the upper triangle shows the pearson correlation between -log10(p-value) of each sample.
+
+```{r fisher_test_plots_log10_altvsref_no_location}
+# ```{r fisher_test_plots_altvsref}
+# fisher_results_df <- as.data.frame(fisher_results)
+# # Replace NA value with a very low value to avoir infinite value when transforming into log10.
+# fisher_results_df[is.na(fisher_results_df)] <- 2.737124e-321
+# fisher_results_df$location <- gsub(pattern = "rs[0-9]*-|-[123]", replacement = "", x = rownames(fisher_results_df))
+# ggpairs(fisher_results_df[1:4], aes(color = fisher_results_df$location)) + ggtitle("Plot matrix for raw fisher test p-value")
+# ```
+
+fisher_results_df_log <- as.data.frame(-log10(fisher_results_no_location))
+# fisher_results_df_log[is.na(fisher_results_df_log)] <- 2.737124e-321
+fisher_results_df_log$location <- gsub(pattern = "rs[0-9]*-|-[123]", replacement = "", x = rownames(fisher_results_df_log))
+fisher_results_df_log_highly_significant_all_sample <- fisher_results_df_log[(fisher_results_df_log$`101_replicat_1` > 6 & fisher_results_df_log$`101_replicat_2` > 6) | (fisher_results_df_log$HSO_replicat_1 > 6 & fisher_results_df_log$HSO_replicat_2 > 6),]
+# fisher_results_df_log[fisher_results_df_log$`101_replicat_1` > 6 & fisher_results_df_log$`101_replicat_2` > 6 & fisher_results_df_log$HSO_replicat_1 > 6 & fisher_results_df_log$HSO_replicat_2 > 6, "highly_significant"] <- rownames(fisher_results_df_log[fisher_results_df_log$`101_replicat_1` > 6 & fisher_results_df_log$`101_replicat_2` > 6 & fisher_results_df_log$HSO_replicat_1 > 6 & fisher_results_df_log$HSO_replicat_2 > 6,])
+ggpairs(fisher_results_df_log[,1:4]) + ggtitle("Plot matrix for -log10 fisher test p-value")
+# ggpairs(fisher_results_df_log[,1:5], aes(color = location), lower = list(continuous = function(data, mapping, ...) ggally_points(data, mapping, ...) + ggrepel::geom_label_repel(aes(label = fisher_results_df_log$highly_significant)))) + ggtitle("Plot matrix for -log10 fisher test p-value")
+
+# ggplot(fisher_results_df_log, aes (x = HSO_replicat_1, y = HSO_replicat_2, color = location)) + geom_point() + geom_vline(xintercept = 20) + geom_hline(yintercept = 20)
+
+# fisher_results_df
+# pairs(fisher_results_df_log[,-grep("location", colnames(fisher_results_df_log))], lower.panel = dens_plotFun, upper.panel = NULL, main = "Fisher test p-value for each condition")
+
+# fisher_results_df <- as.data.frame(fisher_results)
+# fisher_results_df$location <- gsub(pattern = "rs[0-9]*-|-[123]", replacement = "", x = rownames(fisher_results_df))
+# ggplot(fisher_results_df_log, aes (x = HSO_replicat_1, y = HSO_replicat_2, color = location)) + geom_point()
+```
+
+### Table of significant p-value
+
+The following table shows the number of p-value lower than 0.01 (i.e log2(p-value) greater than 2). 
+
+```{r}
+rep1_101_signif_2 <- sum(fisher_results_df_log$`101_replicat_1` > 2)
+rep2_101_signif_2 <- sum(fisher_results_df_log$`101_replicat_2` > 2)
+rep1_HSO_signif_2 <- sum(fisher_results_df_log$HSO_replicat_1 > 2)
+rep2_HSO_signif_2 <- sum(fisher_results_df_log$HSO_replicat_2 > 2)
+signif_df <- as.data.frame(t(data.frame(replicate1_101 = rep1_101_signif_2,
+                                        replicate2_101 = rep2_101_signif_2,
+                                        replicate1_HSO = rep1_HSO_signif_2,
+                                        replicate2_HSO = rep2_HSO_signif_2)))
+control_sequence_nb_rep1_101 <- sum(control_table$rsID. %in% gsub(pattern = "-.*", replacement = "", 
+                                                                  x = rownames(fisher_results_df_log[fisher_results_df_log$`101_replicat_1` > 2,])))
+control_sequence_nb_rep2_101 <- sum(control_table$rsID. %in% gsub(pattern = "-.*", replacement = "", 
+                                                                  x = rownames(fisher_results_df_log[fisher_results_df_log$`101_replicat_2` > 2,])))
+control_sequence_nb_rep1_HSO <- sum(control_table$rsID. %in% gsub(pattern = "-.*", replacement = "", 
+                                                                  x = rownames(fisher_results_df_log[fisher_results_df_log$HSO_replicat_1 > 2,])))
+control_sequence_nb_rep2_HSO <- sum(control_table$rsID. %in% gsub(pattern = "-.*", replacement = "", 
+                                                                  x = rownames(fisher_results_df_log[fisher_results_df_log$HSO_replicat_2 > 2,])))
+
+colnames(signif_df) <- c("Number_of_p-value_lower_than_0.01")
+signif_df$Number_of_significant_control <- c(control_sequence_nb_rep1_101, control_sequence_nb_rep2_101, control_sequence_nb_rep1_HSO, control_sequence_nb_rep2_HSO)
+kable(signif_df)
+# DT::datatable(t(data.frame(replicate1_101 = rep1_101_signif_2,
+#                            replicate2_101 = rep2_101_signif_2,
+#                            replicate1_HSO = rep1_HSO_signif_2,
+#                            replicate2_HSO = rep2_HSO_signif_2)), colnames = "Number of p-value lower than 0.01")
+```
+
+After that, we extracted the most significant p-value with a threshold at 1e-6. On the following plot, only sequence with a Fisher p-value lower than 1e-6 are shown. 
+
+```{r getting_most_significant_p-value_ALT_vs_REF_no_location}
+fisher_results_df_log_highly_significant_all_sample$is_control <- "No"
+rs_in_control <- rownames(fisher_results_df_log_highly_significant_all_sample)[gsub(pattern = "-.*", replacement = "", x = rownames(fisher_results_df_log_highly_significant_all_sample)) %in% control_table$rsID.]
+fisher_results_df_log_highly_significant_all_sample[rs_in_control, "is_control"] <- "Yes"
+fisher_results_df_log_highly_significant_all_sample$name <- rownames(fisher_results_df_log_highly_significant_all_sample)
+
+# ggpairs(fisher_results_df_log_highly_significant_all_sample[, 1:4], aes(color = as.factor(fisher_results_df_log_highly_significant_all_sample$location)), lower = list(continuous = function(data, mapping, ...) ggally_points(data, mapping, ...) + ggrepel::geom_label_repel(aes(label = fisher_results_df_log_highly_significant_all_sample$name))), upper = NULL) + ggtitle("Plot matrix for -log10 p-value significant in all samples")
+fisher_results_df_log_highly_significant_all_sample %>% ggpairs(., legend = 1, columns = 1:4, 
+                                                                aes(color = fisher_results_df_log_highly_significant_all_sample$is_control), lower = list(continuous = function(data, mapping, ...) ggally_points(data, mapping, ...) + ggrepel::geom_label_repel(aes(label = fisher_results_df_log_highly_significant_all_sample$name), max.overlaps = 50)), upper = NULL) + 
+  theme(legend.position = "bottom") + 
+  labs(fill = "is_control")
+# Get HSO and 101 sequences with a p-value < 1e-6
+# sample_HSO_signif_rs_e6 <- gsub(pattern = "-.*", replacement = "", x = rownames(fisher_results_df_log[fisher_results_df_log$HSO_replicat_1 > 6 & fisher_results_df_log$HSO_replicat_2 > 6,])) 
+# sample_101_signif_rs_e6 <- gsub(pattern = "-.*", replacement = "", x = rownames(fisher_results_df_log[fisher_results_df_log$`101_replicat_1` > 6 & fisher_results_df_log$`101_replicat_2` > 6,]))
+# 
+# sample_HSO_signif_rs_e2 <- gsub(pattern = "-.*", replacement = "", x = rownames(fisher_results_df_log[fisher_results_df_log$HSO_replicat_1 > 2 & fisher_results_df_log$HSO_replicat_2 > 2,])) 
+# sample_101_signif_rs_e2 <- gsub(pattern = "-.*", replacement = "", x = rownames(fisher_results_df_log[fisher_results_df_log$`101_replicat_1` > 2 & fisher_results_df_log$`101_replicat_2` > 2,]))
+
+# a <- unique(gsub(pattern = "-.*", replacement = "", x = rownames(fisher_results_df_log)))
+# sum(a %in% control_names)
+
+# unique(sample_HSO_signif_rs_e6[sample_HSO_signif_rs_e6 %in% control_table$rsID.])
+# unique(sample_101_signif_rs_e6[sample_101_signif_rs_e6 %in% control_table$rsID.])
+
+# control_table[control_table$rsID. %in% sample_HSO_signif_rs_e2[sample_HSO_signif_rs_e2 %in% control_table$rsID.],]
+# control_table[control_table$rsID. %in% sample_101_signif_rs_e2[sample_101_signif_rs_e2 %in% control_table$rsID.],]
+```
+
+```{r}
+fisher_results_samples <- as.data.frame(apply(as.data.frame(fisher_results_no_location[,grep("rep", colnames(fisher_results_no_location))]), 2, as.numeric))
+# Replace 1 value by 0.9999999 to prevent rowsums to be equal to 2. Sumlog can't perform p-value combination when the sum of p-value is equal to 2
+fisher_results_samples[fisher_results_samples == "1"] <- 0.9999999
+
+rownames(fisher_results_samples) <- rownames(fisher_results_no_location)
+colnames(fisher_results_samples) <- paste0("pvalue_", colnames(fisher_results_samples))
+colnames(fisher_odd_ratio_no_location) <- paste0("odd_ratio_", colnames(fisher_results_no_location))
+
+# Correct p-value using the BH method
+# Use the index contained in the results of mt.rawp2adjp to get the location of the sequence in the matrix.
+adjusted_pval <- apply(fisher_results_samples, 2, mt.rawp2adjp, proc="BH")
+fisher_results_samples$adj_pvalue_101_replicat_1 <- adjusted_pval$pvalue_101_replicat_1$adjp[order(adjusted_pval$pvalue_101_replicat_1$index),][,2]
+fisher_results_samples$adj_pvalue_101_replicat_2 <- adjusted_pval$pvalue_101_replicat_2$adjp[order(adjusted_pval$pvalue_101_replicat_2$index),][,2]
+fisher_results_samples$adj_pvalue_HSO_replicat_1 <- adjusted_pval$pvalue_HSO_replicat_1$adjp[order(adjusted_pval$pvalue_HSO_replicat_1$index),][,2]
+fisher_results_samples$adj_pvalue_HSO_replicat_2 <- adjusted_pval$pvalue_HSO_replicat_2$adjp[order(adjusted_pval$pvalue_HSO_replicat_2$index),][,2]
+
+# Combine fisher test p-value 
+rv_vs_notrs_101_combined_pval <- apply(fisher_results_samples[,grep("adj_pvalue_101", colnames(fisher_results_samples))], 1, sumlog)
+fisher_results_samples <- cbind(fisher_results_samples, combined_adj_pval_101 = do.call(rbind,lapply(rv_vs_notrs_101_combined_pval,function(v){v$p})))
+rv_vs_notrs_HSO_combined_pval <- apply(fisher_results_samples[,grep("adj_pvalue_HSO", colnames(fisher_results_samples))], 1, sumlog)
+fisher_results_samples <- cbind(fisher_results_samples, combined_adj_pval_HSO = do.call(rbind,lapply(rv_vs_notrs_HSO_combined_pval,function(v){v$p})))
+
+# Create the complete table that will be exported
+fisher_test_alt_vs_ref_full_table <- cbind(fisher_results_samples, fisher_odd_ratio_no_location)
+# Check if the odd ratio are concordant between replicates
+fisher_test_alt_vs_ref_full_table$concordance_odd_ratio_101 <- FALSE
+fisher_test_alt_vs_ref_full_table[(fisher_test_alt_vs_ref_full_table$odd_ratio_101_replicat_1 < 1 & fisher_test_alt_vs_ref_full_table$odd_ratio_101_replicat_2 < 1) |  (fisher_test_alt_vs_ref_full_table$odd_ratio_101_replicat_1 > 1 & fisher_test_alt_vs_ref_full_table$odd_ratio_101_replicat_2 > 1) | (fisher_test_alt_vs_ref_full_table$odd_ratio_101_replicat_1 == 1 & fisher_test_alt_vs_ref_full_table$odd_ratio_101_replicat_2 == 1), "concordance_odd_ratio_101"] <- TRUE
+fisher_test_alt_vs_ref_full_table$concordance_odd_ratio_HSO <- FALSE
+fisher_test_alt_vs_ref_full_table[(fisher_test_alt_vs_ref_full_table$odd_ratio_HSO_replicat_1 < 1 & fisher_test_alt_vs_ref_full_table$odd_ratio_HSO_replicat_2 < 1) | (fisher_test_alt_vs_ref_full_table$odd_ratio_HSO_replicat_1 > 1 &  fisher_test_alt_vs_ref_full_table$odd_ratio_HSO_replicat_2 > 1) | (fisher_test_alt_vs_ref_full_table$odd_ratio_HSO_replicat_1 == 1 & fisher_test_alt_vs_ref_full_table$odd_ratio_HSO_replicat_2 == 1), "concordance_odd_ratio_HSO"] <- TRUE
+
+fisher_test_alt_vs_ref_full_table$mean_odd_ratio_101 <- log2(rowMeans(fisher_test_alt_vs_ref_full_table[, grep("odd_ratio_101", colnames(fisher_test_alt_vs_ref_full_table))]))
+fisher_test_alt_vs_ref_full_table$mean_odd_ratio_HSO <- log2(rowMeans(fisher_test_alt_vs_ref_full_table[, grep("odd_ratio_HSO", colnames(fisher_test_alt_vs_ref_full_table))]))
+fisher_test_alt_vs_ref_full_table$concordance_odd_ratio_101 <- as.factor(fisher_test_alt_vs_ref_full_table$concordance_odd_ratio_101)
+fisher_test_alt_vs_ref_full_table$concordance_odd_ratio_HSO <- as.factor(fisher_test_alt_vs_ref_full_table$concordance_odd_ratio_HSO)
+fisher_test_alt_vs_ref_full_table_for_plot <- fisher_test_alt_vs_ref_full_table
+
+```
+
+### Volcano plot
+
+The following volcano plots show the relation between the p-value and the odd ratio. The plots are splitted depending on the concordance of odd ratio. TRUE indicates concordants odd ratio, whereas FALSE indicante non concordant ones.
+
+```{r volcano_qval_oddratio_alt_vs_ref_no_location}
+ggplot(fisher_test_alt_vs_ref_full_table, aes(x = mean_odd_ratio_101, y = -log10(combined_adj_pval_101), color = concordance_odd_ratio_101)) + 
+  geom_point() + 
+  facet_wrap(~ concordance_odd_ratio_101) +
+  ggtitle("Volcano plot of the -log10 of combined pvalue for samples 101") + 
+  ylab("-log10(combined pvalue of Fisher test)") +
+  xlab("Mean odd ratio of Fisher test") + 
+  labs(color = "Are odd ratio concordant") +
+  scale_colour_discrete(labels = paste(levels(fisher_test_alt_vs_ref_full_table$concordance_odd_ratio_101), table(fisher_test_alt_vs_ref_full_table$concordance_odd_ratio_101)))
+
+ggplot(fisher_test_alt_vs_ref_full_table, aes(x = mean_odd_ratio_HSO, y = -log10(combined_adj_pval_HSO), color = concordance_odd_ratio_HSO)) + 
+  geom_point() + 
+  facet_wrap(~ concordance_odd_ratio_HSO) +
+  ggtitle("Volcano plot f the -log10 of combined pvalue for samples HSO") + 
+  ylab("-log10(combined pvalue of Fisher test)") +
+  xlab("Mean odd ratio of Fisher test") + 
+  labs(color = "Are odd ratio concordant") +
+  scale_colour_discrete(labels = paste(levels(fisher_test_alt_vs_ref_full_table$concordance_odd_ratio_HSO), table(fisher_test_alt_vs_ref_full_table$concordance_odd_ratio_HSO)))
+```
+
+### Export table
+
+For this particular Fisher test, I can't create a table containing counts.
+
+I created and exported a table containing all results for this pool of Fisher tests. The table contains:
+
+* p-value of Fisher test of each sequence for each sample
+* Adjusted p-value of Fisher test using the Benjamini-Hochberg correction method for multiple testing
+* Combined adjusted p-value using the Fisher method
+* The odd ratio of Fisher test for each sequence and each sample
+* A boolean column (TRUE of FALSE) for each sample indicating if odd ratio for both replicate are concordant (both < 1 or both = 1 or both > 1)
+* The mean odd ratio of each sample
+
+```{r}
+write.csv(x = fisher_test_alt_vs_ref_full_table,
+          file = "/data/nin/Workspace/Runs/Run_384/Tables/Table_Fisher_tests_chapter_2.5.csv", 
+          row.names = TRUE)
+```
+
+### Table with some sequences having a significant regulatory effect
+
+The following table shows sequences having a significant regulatory effect. The shown sequences are selected by having a combined p-value (using the Fisher combination method for p-value) lower than 0.05
+
+#### Sample 101
+
+```{r}
+sample_101_significant_seq_combined_pval <- as.data.frame( rownames(fisher_test_alt_vs_ref_full_table[fisher_test_alt_vs_ref_full_table$combined_adj_pval_101 < 0.05,]))
+colnames(sample_101_significant_seq_combined_pval) <- "significant_sequences"
+datatable(sample_101_significant_seq_combined_pval)
+
+```
+
+#### Sample HSO
+
+```{r}
+sample_HSO_significant_seq_combined_pval <- as.data.frame( rownames(fisher_test_alt_vs_ref_full_table[fisher_test_alt_vs_ref_full_table$combined_adj_pval_HSO < 0.05,]))
+colnames(sample_HSO_significant_seq_combined_pval) <- "significant_sequences"
+datatable(sample_HSO_significant_seq_combined_pval)
+
+```
+
+#### Common significant sequences
+
+The following venn diagram shows the number of significant sequences detected in both samples.
+
+```{r}
+# Fonction d'aide pour afficher le diagramme de Venn
+display_venn <- function(x, ...){
+  library(VennDiagram)
+  grid.newpage()
+  venn_object <- venn.diagram(x, filename = NULL, ...)
+  grid.draw(venn_object)
+}
+display_venn(
+        x = c(sample_HSO_significant_seq_combined_pval, sample_101_significant_seq_combined_pval),
+        category.names = c(paste0("HSO\nn = ", nrow(sample_HSO_significant_seq_combined_pval)), 
+                           paste0("101\nn = ", nrow(sample_101_significant_seq_combined_pval))),
+        # Cercles
+        lwd = 2,
+        lty = 'blank',
+        fill = c("#999999", "#E69F00"),
+        # Nombres
+        cex = .9,
+        fontface = "italic",
+        # Noms des groupes
+        cat.cex = 1,
+        cat.fontface = "bold",
+        cat.default.pos = "outer",
+        cat.dist = c(0.055, 0.055)
+)
+
+```
+
+Here is the list of common detected sequences
+
+```{r}
+common_significant_seq_combined_pval <- as.data.frame(intersect(sample_101_significant_seq_combined_pval$significant_sequences, sample_HSO_significant_seq_combined_pval$significant_sequences))
+colnames(common_significant_seq_combined_pval) <- "Common_significant_sequences"
+datatable(common_significant_seq_combined_pval)
+
+```

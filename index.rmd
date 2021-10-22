@@ -1,0 +1,118 @@
+---
+title: "MPRA Analysis"
+author: "Sebastien Nin" 
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  bookdown::gitbook:
+    split_by: rmd 
+    toc_depth: 6
+    download: ["epub", "mobi"]
+    sharing:
+      facebook: false
+      twitter: false
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setKnitrChunkDefaultOptions, include=FALSE}
+eval_after <- c(
+  "fig.cap",
+  "fig.height",
+  "fig.width",
+  "out.height",
+  "out.width"
+)
+
+knitr::opts_chunk$set(
+  echo = FALSE,
+  message = FALSE,
+  fig.width = 10,
+  fig.height = 10,
+  eval.after = eval_after,
+  cache = TRUE,
+  warning = FALSE
+)
+```
+
+```{r loadLibraries, warning=FALSE, cache=FALSE}
+loadLibrary <- function(package) {
+  if (!require(basename(package), character.only = TRUE)) BiocManager::install(package, update = FALSE)
+  library(basename(package), character.only = TRUE)
+}
+
+packages <- c(
+  "reshape2",
+  "ggplot2",
+  "multtest",
+  "pheatmap",
+  "GGally",
+  "xlsx",
+  "metap",
+  "yaml",
+  "edgeR",
+  "kableExtra",
+  "DT",
+  "VennDiagram"
+)
+
+invisible(lapply(packages, loadLibrary))
+theme_set(theme_bw())
+
+## Define a function to draw a scatter plot for a pair of variables (samples) with density colors
+dens_plotFun <- function(x, y) {
+  dns <- densCols(x, y)
+  points(x, y, col = dns, pch = ".", panel.first = grid(), cex = 5)
+  abline(lm(y ~ x), col = "red")
+  text(min(x) + 5, max(y) - 1, labels = paste0("r=", round((cor(x, y)), 2)), col = "red")
+  # text(min(x)+5,max(y)-1,labels = paste('R^2=',round((cor(x,y))^2,2)) ,col='red' )
+}
+```
+
+```{r loadFunctions, cache=F}
+work_dir <- read_yaml("_bookdown.yml")$working_dir
+setwd(work_dir)
+# Retrieve the relative path used by Bookdown as output folder
+book_from_rmd <- read_yaml("_bookdown.yml")$output_dir
+mw_from_rmd <- sub("/[^\\.].*$", "", book_from_rmd)
+book_from_mw <- gsub("\\.\\./", "", book_from_rmd)
+dir.create(
+  file.path(book_from_rmd, "plots"),
+  recursive = TRUE,
+  showWarnings = FALSE
+)
+
+functions <- paste0(work_dir, "/linkSmiToRmdBookDir.R")
+
+invisible(lapply(functions, source))
+```
+
+# Abstract
+
+## Experimental design
+
+The following analysis was done on MPRA samples from project 202107030. In this project, 24 000 synthetized sequences where inserted into two different plasmids. One named 101 which is a STARR-seq plasmid used by Salvatore's team, the second one is named HSO and is a STARR-seq plasmid without promoter sequence. The modified plasmids were transfected into cells and put to culture. mRNA were extracted and prepared to create a mRNA (or cDNA) library for sequencing. The sequence of plasmids were also extracted and prepared to sequencing. Thus, the final output is:
+
+* 2 mRNA (named later cDNA) replicates for 101 plasmid
+* 2 gDNA replicates for 101 plasmid
+* 2 mRNA replicates for HSO plasmid
+* 2 gDNA replicates for HSO plasmid
+
+## Control present in data
+
+In the data, 18 control sequences were added. Among those control sequences some come from lab tests, other come from databases. 
+
+## Trouble with sequencing
+
+We had trouble to perform the sequencing of this project. It was mainly due to a lack of diversity in oligo sequences. All oligo sequences start with an homology sequence used to insert the oligos into the plasmids. To overcome this issue, Illumina advise us to add 50% of PhiX library in the sequencing run. This added artificial diversity to sequences and enable us to perform the sequencing. We sadly had less reads than expected. We have between 3 and 17 milion reads per samples with no biais between condition.
+
+## Trouble with analysis
+
+None of the proposed tools (MPRAflow, QuASAR) or other published tool enable the analysis of this kind of data. Thus, we created our own workflow to process the data.
+
+## Information on sequences
+
+The sequences are denoted rsxxxxxx-[ALT|REF]-[Left|Middle|Right]-[1|2|3].
+
+ALT and REF define respectively the Alternative and the Reference sequence. Knowing that the alternative sequence differ from the reference by one nucleotide.
+Left, Middle and Right, define the sliding window used to define the region of the sequence. The initial sequence is 200 nucleotide length. Florian used a script to create a sliding window of 150 nt in the initial sequence. This window trimmed 50 nt on the 5' (Left), the 3' (Right) or 25 nt on both end (Middle).
+Finally, -1, -2 and -3 define Alternative sequences number, some reference sequences have 1, 2 or 3 corresponding alternative sequences differing from one nucleotide always at the same position (3 indicate that the reference sequence have 3 alternative sequences and at the SNP position, we will find all possibitilities of nucleotides (ACGT))

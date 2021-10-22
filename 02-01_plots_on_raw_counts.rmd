@@ -1,0 +1,57 @@
+---
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+## Graphics on raw counts
+
+Before going into statistical analysis, I draw some plots on raw counts for each samples/condition. 
+
+Here are scatterplot matrices showing the expression level of each sequence in each sample two by two. A dot represent the expression level of a sequence in each sample. The color intensity is proportional to the count density. The r value correspond to the Pearson correlation value between each shown sample.
+
+### Pairs plot 
+
+```{r density_plot_all_count}
+pairs(log2(count_matrix[, grep(pattern = "101", colnames(count_matrix))] + 1), lower.panel = dens_plotFun, upper.panel = NULL, main = "Expression level for cDNA and gDNA\nfor each 101 sample")
+
+pairs(log2(count_matrix[, grep(pattern = "HSO", colnames(count_matrix))] + 1), lower.panel = dens_plotFun, upper.panel = NULL, main = "Expression level for cDNA and gDNA\nfor each HSO sample")
+
+pairs(log2(count_matrix[, grep(pattern = "cDNA", colnames(count_matrix))] + 1), lower.panel = dens_plotFun, upper.panel = NULL, main = "cDNA expression level for each sample")
+
+pairs(log2(count_matrix[, grep(pattern = "ADNg", colnames(count_matrix))] + 1), lower.panel = dens_plotFun, upper.panel = NULL, main = "gDNA expression level for each sample")
+
+# count_matrix_melt <- melt(count_matrix)
+# count_matrix_melt$Allele <- gsub(pattern = "-.*", replacement = "",
+# x = gsub(pattern = "rs[0-9]*-", replacement = "", x = count_matrix_melt$Var1))
+# ggplot(count_matrix_melt, aes(x = log2(value+1), color = Var2)) + geom_density() + facet_wrap(facets = ~ Var2 + Allele)
+# ggplot(count_matrix_melt, aes(x = log2(value+1), color = Var2)) + geom_density() + facet_wrap(facets = ~ Allele + Var2)
+```
+
+### Correlation heatmap
+
+I also draw a correlation heatmap to see all correlation together.
+
+```{r cor_heatmap}
+pheatmap(cor(count_matrix), main = "Correlation of expression level of\nall condition and replicate")
+```
+
+Samples from the same condition are more correlated than samples from two different conditions (101 vs HSO). We also observe that HSO samples are less correlated between cDNA and gDNA than 101 samples.
+
+### Boxplot of counts
+
+I then draw boxplot of expression level in each samples colored by the allele (REF or ALT). I tried to see if there is a shift in counts in ALT and REF sequences in all samples.
+
+```{r pairs_ref_vs_alt}
+count_matrix_melt <- melt(count_matrix)
+count_matrix_melt$Allele <- gsub(pattern = "rs[0-9]*-|(-(Right|Left|Middle)-.*)", replacement = "", x = count_matrix_melt$Var1)
+ggplot(count_matrix_melt, aes(x = Var2, y = value, fill = Allele)) +
+  geom_boxplot() +
+  ggtitle("Boxplot of counts in each samples")
+ggplot(count_matrix_melt, aes(x = Var2, y = value, fill = Allele)) +
+  geom_boxplot(outlier.shape = NA) +
+  ylim(0, 2000) +
+  ggtitle("Boxplot of counts in each samples,\nY limit reshaped after hiding outliers")
+```
+
+There is no shift in ALT and REF counts.

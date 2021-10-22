@@ -1,0 +1,72 @@
+---
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r create_complete_matrix}
+fisher_test_rs_vs_notrs_full_table <- as.data.frame(fisher_test_rs_vs_notrs)
+colnames(fisher_test_rs_vs_notrs_full_table) <- paste0("pvalue_", colnames(fisher_test_rs_vs_notrs_full_table))
+# Correct p-value using the BH method
+# Use the index contained in the results of mt.rawp2adjp to get the location of the sequence in the matrix.
+adjusted_pval <- apply(fisher_test_rs_vs_notrs_full_table, 2, mt.rawp2adjp, proc="BH")
+fisher_test_rs_vs_notrs_full_table$adj_pvalue_101_replicat_1 <- adjusted_pval$pvalue_101_replicat_1$adjp[order(adjusted_pval$pvalue_101_replicat_1$index),][,2]
+fisher_test_rs_vs_notrs_full_table$adj_pvalue_101_replicat_2 <- adjusted_pval$pvalue_101_replicat_2$adjp[order(adjusted_pval$pvalue_101_replicat_2$index),][,2]
+fisher_test_rs_vs_notrs_full_table$adj_pvalue_HSO_replicat_1 <- adjusted_pval$pvalue_HSO_replicat_1$adjp[order(adjusted_pval$pvalue_HSO_replicat_1$index),][,2]
+fisher_test_rs_vs_notrs_full_table$adj_pvalue_HSO_replicat_2 <- adjusted_pval$pvalue_HSO_replicat_2$adjp[order(adjusted_pval$pvalue_HSO_replicat_2$index),][,2]
+# Combine fisher test p-value 
+rv_vs_notrs_101_combined_pval <- apply(fisher_test_rs_vs_notrs_full_table[,grep("adj_pvalue_101", colnames(fisher_test_rs_vs_notrs_full_table))], 1, sumlog)
+fisher_test_rs_vs_notrs_full_table <- cbind(fisher_test_rs_vs_notrs_full_table, combined_pval_101 = do.call(rbind,lapply(rv_vs_notrs_101_combined_pval,function(v){v$p})))
+rv_vs_notrs_HSO_combined_pval <- apply(fisher_test_rs_vs_notrs_full_table[,grep("adj_pvalue_HSO", colnames(fisher_test_rs_vs_notrs_full_table))], 1, sumlog)
+fisher_test_rs_vs_notrs_full_table <- cbind(fisher_test_rs_vs_notrs_full_table, combined_pval_HSO = do.call(rbind,lapply(rv_vs_notrs_HSO_combined_pval,function(v){v$p})))
+
+# fisher_test_rs_vs_notrs_full_table <- cbind(count_matrix, fisher_test_rs_vs_notrs_full_table, ttest_results_matrix, fisher_test_rs_vs_notrs_odd_ratio)
+fisher_test_rs_vs_notrs_full_table <- cbind(count_matrix, fisher_test_rs_vs_notrs_full_table, fisher_test_rs_vs_notrs_odd_ratio)
+# Check if the odd ratio are concordant between replicates
+fisher_test_rs_vs_notrs_full_table$concordance_odd_ratio_101 <- FALSE
+fisher_test_rs_vs_notrs_full_table[(fisher_test_rs_vs_notrs_full_table$odd_ratio_101_replicat_1 < 1 &
+                                      fisher_test_rs_vs_notrs_full_table$odd_ratio_101_replicat_2 < 1) | 
+                                     (fisher_test_rs_vs_notrs_full_table$odd_ratio_101_replicat_1 > 1 & 
+                                        fisher_test_rs_vs_notrs_full_table$odd_ratio_101_replicat_2 > 1) | 
+                                     (fisher_test_rs_vs_notrs_full_table$odd_ratio_101_replicat_1 == 1 &
+                                        fisher_test_rs_vs_notrs_full_table$odd_ratio_101_replicat_2 == 1), "concordance_odd_ratio_101"] <- TRUE
+fisher_test_rs_vs_notrs_full_table$concordance_odd_ratio_HSO <- FALSE
+fisher_test_rs_vs_notrs_full_table[(fisher_test_rs_vs_notrs_full_table$odd_ratio_HSO_replicat_1 < 1 &
+                                      fisher_test_rs_vs_notrs_full_table$odd_ratio_HSO_replicat_2 < 1) | 
+                                     (fisher_test_rs_vs_notrs_full_table$odd_ratio_HSO_replicat_1 > 1 & 
+                                        fisher_test_rs_vs_notrs_full_table$odd_ratio_HSO_replicat_2 > 1) | 
+                                     (fisher_test_rs_vs_notrs_full_table$odd_ratio_HSO_replicat_1 == 1 &
+                                        fisher_test_rs_vs_notrs_full_table$odd_ratio_HSO_replicat_2 == 1), "concordance_odd_ratio_HSO"] <- TRUE
+
+# fisher_test_rs_vs_notrs_full_table$mean_odd_ratio_101 <- ifelse(fisher_test_rs_vs_notrs_full_table$concordance_odd_ratio_101 == TRUE, log2(rowMeans(fisher_test_rs_vs_notrs_full_table[fisher_test_rs_vs_notrs_full_table$concordance_odd_ratio_101 == TRUE, grep("odd_ratio_101", colnames(fisher_test_rs_vs_notrs_full_table))])), 0)
+# fisher_test_rs_vs_notrs_full_table$mean_odd_ratio_101 <- log2(rowMeans(fisher_test_rs_vs_notrs_full_table[fisher_test_rs_vs_notrs_full_table$concordance_odd_ratio_101 == TRUE,
+#                                                                                                           grep("odd_ratio_101",
+#                                                                                                                colnames(fisher_test_rs_vs_notrs_full_table))]))
+fisher_test_rs_vs_notrs_full_table$mean_odd_ratio_101 <- log2(rowMeans(fisher_test_rs_vs_notrs_full_table[,
+                                                                                                          grep("odd_ratio_101",
+                                                                                                               colnames(fisher_test_rs_vs_notrs_full_table))]))
+# fisher_test_rs_vs_notrs_full_table$mean_odd_ratio_HSO <- ifelse(fisher_test_rs_vs_notrs_full_table$concordance_odd_ratio_HSO == TRUE, log2(rowMeans(fisher_test_rs_vs_notrs_full_table[fisher_test_rs_vs_notrs_full_table$concordance_odd_ratio_HSO == TRUE, grep("odd_ratio_HSO", colnames(fisher_test_rs_vs_notrs_full_table))])), 0)
+# fisher_test_rs_vs_notrs_full_table$mean_odd_ratio_HSO <- log2(rowMeans(fisher_test_rs_vs_notrs_full_table[fisher_test_rs_vs_notrs_full_table$concordance_odd_ratio_HSO == TRUE,
+#                                                                                                           grep("odd_ratio_HSO",
+#                                                                                                                colnames(fisher_test_rs_vs_notrs_full_table))]))
+fisher_test_rs_vs_notrs_full_table$mean_odd_ratio_HSO <- log2(rowMeans(fisher_test_rs_vs_notrs_full_table[,
+                                                                                                          grep("odd_ratio_HSO",
+                                                                                                               colnames(fisher_test_rs_vs_notrs_full_table))]))
+fisher_test_rs_vs_notrs_full_table$concordance_odd_ratio_101 <- as.factor(fisher_test_rs_vs_notrs_full_table$concordance_odd_ratio_101)
+fisher_test_rs_vs_notrs_full_table$concordance_odd_ratio_HSO <- as.factor(fisher_test_rs_vs_notrs_full_table$concordance_odd_ratio_HSO)
+fisher_test_rs_vs_notrs_full_table_for_plot <- fisher_test_rs_vs_notrs_full_table
+
+# ggpairs(fisher_test_rs_vs_notrs_full_table_for_plot[,1:4])
+
+# Get significant adjusted_pvalue and pvalue
+signif_pval_inf_2 <- fisher_test_rs_vs_notrs_full_table[, grep("combine", colnames(fisher_test_rs_vs_notrs_full_table))]<1e-2
+colnames(signif_pval_inf_2) <- paste0(colnames(signif_pval_inf_2), "_signif_2")
+signif_pval_inf_6 <- fisher_test_rs_vs_notrs_full_table[, grep("combine", colnames(fisher_test_rs_vs_notrs_full_table))]<1e-6
+colnames(signif_pval_inf_6) <- paste0(colnames(signif_pval_inf_6), "_signif_6")
+fisher_test_rs_vs_notrs_full_table <- cbind(fisher_test_rs_vs_notrs_full_table, signif_pval_inf_2, signif_pval_inf_6)
+# ggpairs(fisher_test_rs_vs_notrs_full_table[, grep("101", colnames(fisher_test_rs_vs_notrs_full_table))])
+# ggpairs(fisher_test_rs_vs_notrs_full_table[, grep("HSO", colnames(fisher_test_rs_vs_notrs_full_table))])
+
+# ggplot(fisher_test_rs_vs_notrs_full_table, aes(x = mean_odd_ratio_101, y = -log10(combined_pval_101), color = combined_pval_101_signif_6)) + geom_point() 
+# ggplot(fisher_test_rs_vs_notrs_full_table, aes(x = mean_odd_ratio_HSO, y = -log10(combined_pval_HSO), color = combined_pval_HSO_signif_6)) + geom_point() 
+```

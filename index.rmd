@@ -52,7 +52,9 @@ packages <- c(
   "edgeR",
   "kableExtra",
   "DT",
-  "VennDiagram"
+  "VennDiagram",
+  "qvalue",
+  "samplesizeCMH"
 )
 
 invisible(lapply(packages, loadLibrary))

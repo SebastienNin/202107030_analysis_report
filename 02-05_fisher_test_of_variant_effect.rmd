@@ -177,7 +177,8 @@ control_sequence_nb_rep2_HSO <- sum(control_table$rsID. %in% gsub(pattern = "-.*
                                                                   x = rownames(fisher_results_df_log[fisher_results_df_log$HSO_replicat_2 > 2,])))
 
 colnames(signif_df) <- c("Number_of_p-value_lower_than_0.01")
-signif_df$Number_of_significant_control <- c(control_sequence_nb_rep1_101, control_sequence_nb_rep2_101, control_sequence_nb_rep1_HSO, control_sequence_nb_rep2_HSO)
+signif_df$Number_of_significant_control <- c(control_sequence_nb_rep1_101, control_sequence_nb_rep2_101, 
+                                             control_sequence_nb_rep1_HSO, control_sequence_nb_rep2_HSO)
 kable(signif_df)
 # DT::datatable(t(data.frame(replicate1_101 = rep1_101_signif_2,
 #                            replicate2_101 = rep2_101_signif_2,
@@ -238,13 +239,19 @@ fisher_results_samples$adj_pvalue_HSO_replicat_2 <- adjusted_pval$pvalue_HSO_rep
 # rv_vs_notrs_HSO_combined_pval <- apply(fisher_results_samples[,grep("adj_pvalue_HSO", colnames(fisher_results_samples))], 1, sumlog)
 # fisher_results_samples <- cbind(fisher_results_samples, combined_adj_pval_HSO = do.call(rbind,lapply(rv_vs_notrs_HSO_combined_pval,function(v){v$p})))
 rv_vs_notrs_101_combined_pval <- apply(fisher_results_samples[,grep("pvalue_101_replicat", colnames(fisher_results_samples))], 1, sumlog)
-fisher_results_samples <- cbind(fisher_results_samples, combined_adj_pval_101 = do.call(rbind,lapply(rv_vs_notrs_101_combined_pval,function(v){v$p})))
+fisher_results_samples <- cbind(fisher_results_samples, combined_pval_101 = do.call(rbind,lapply(rv_vs_notrs_101_combined_pval,function(v){v$p})))
 rv_vs_notrs_HSO_combined_pval <- apply(fisher_results_samples[,grep("pvalue_HSO_replicat", colnames(fisher_results_samples))], 1, sumlog)
-fisher_results_samples <- cbind(fisher_results_samples, combined_adj_pval_HSO = do.call(rbind,lapply(rv_vs_notrs_HSO_combined_pval,function(v){v$p})))
+fisher_results_samples <- cbind(fisher_results_samples, combined_pval_HSO = do.call(rbind,lapply(rv_vs_notrs_HSO_combined_pval,function(v){v$p})))
 
-adjusted_pval <- apply(fisher_results_samples[, grep("combined_adj_pval", colnames(fisher_results_samples))], 2, mt.rawp2adjp, proc="BH")
-fisher_results_samples$adj_combined_pvalue_101 <- adjusted_pval$combined_adj_pval_101$adjp[order(adjusted_pval$combined_adj_pval_101$index),][,2]
-fisher_results_samples$adj_combined_pvalue_HSO <- adjusted_pval$combined_adj_pval_HSO$adjp[order(adjusted_pval$combined_adj_pval_HSO$index),][,2]
+adjusted_pval <- apply(fisher_results_samples[, grep("combined_pval", colnames(fisher_results_samples))], 2, mt.rawp2adjp, proc="BH")
+fisher_results_samples$adj_combined_pvalue_101 <- adjusted_pval$combined_pval_101$adjp[order(adjusted_pval$combined_pval_101$index),][,2]
+fisher_results_samples$adj_combined_pvalue_HSO <- adjusted_pval$combined_pval_HSO$adjp[order(adjusted_pval$combined_pval_HSO$index),][,2]
+
+fisher_results_samples$adj_combined_pvalue_101_FDR_5 <- mt.reject(adjusted_pval$combined_pval_101$adjp[order(adjusted_pval$combined_pval_101$index),], alpha = 0.05)$which[,2]
+fisher_results_samples$adj_combined_pvalue_101_FDR_10 <- mt.reject(adjusted_pval$combined_pval_101$adjp[order(adjusted_pval$combined_pval_101$index),], alpha = 0.10)$which[,2]
+
+fisher_results_samples$adj_combined_pvalue_HSO_FDR_5 <- mt.reject(adjusted_pval$combined_pval_HSO$adjp[order(adjusted_pval$combined_pval_HSO$index),], alpha = 0.05)$which[,2]
+fisher_results_samples$adj_combined_pvalue_HSO_FDR_10 <- mt.reject(adjusted_pval$combined_pval_HSO$adjp[order(adjusted_pval$combined_pval_HSO$index),], alpha = 0.10)$which[,2]
 
 # Create the complete table that will be exported
 fisher_test_alt_vs_ref_full_table <- cbind(fisher_results_samples, fisher_odd_ratio_no_location)
@@ -254,39 +261,48 @@ fisher_test_alt_vs_ref_full_table[(fisher_test_alt_vs_ref_full_table$odd_ratio_1
 fisher_test_alt_vs_ref_full_table$concordance_odd_ratio_HSO <- FALSE
 fisher_test_alt_vs_ref_full_table[(fisher_test_alt_vs_ref_full_table$odd_ratio_HSO_replicat_1 < 1 & fisher_test_alt_vs_ref_full_table$odd_ratio_HSO_replicat_2 < 1) | (fisher_test_alt_vs_ref_full_table$odd_ratio_HSO_replicat_1 > 1 &  fisher_test_alt_vs_ref_full_table$odd_ratio_HSO_replicat_2 > 1) | (fisher_test_alt_vs_ref_full_table$odd_ratio_HSO_replicat_1 == 1 & fisher_test_alt_vs_ref_full_table$odd_ratio_HSO_replicat_2 == 1), "concordance_odd_ratio_HSO"] <- TRUE
 
-fisher_test_alt_vs_ref_full_table$mean_odd_ratio_101 <- log2(rowMeans(fisher_test_alt_vs_ref_full_table[, grep("odd_ratio_101", colnames(fisher_test_alt_vs_ref_full_table))]))
-fisher_test_alt_vs_ref_full_table$mean_odd_ratio_HSO <- log2(rowMeans(fisher_test_alt_vs_ref_full_table[, grep("odd_ratio_HSO", colnames(fisher_test_alt_vs_ref_full_table))]))
+fisher_test_alt_vs_ref_full_table$mean_odd_ratio_101 <- rowMeans(fisher_test_alt_vs_ref_full_table[, grep("odd_ratio_101_rep", colnames(fisher_test_alt_vs_ref_full_table))])
+fisher_test_alt_vs_ref_full_table$mean_odd_ratio_HSO <- rowMeans(fisher_test_alt_vs_ref_full_table[, grep("odd_ratio_HSO_rep", colnames(fisher_test_alt_vs_ref_full_table))])
+
+# fisher_test_alt_vs_ref_full_table$mean_odd_ratio_101 <- log2(rowMeans(fisher_test_alt_vs_ref_full_table[, grep("odd_ratio_101", colnames(fisher_test_alt_vs_ref_full_table))]))
+# fisher_test_alt_vs_ref_full_table$mean_odd_ratio_HSO <- log2(rowMeans(fisher_test_alt_vs_ref_full_table[, grep("odd_ratio_HSO", colnames(fisher_test_alt_vs_ref_full_table))]))
 fisher_test_alt_vs_ref_full_table$concordance_odd_ratio_101 <- as.factor(fisher_test_alt_vs_ref_full_table$concordance_odd_ratio_101)
 fisher_test_alt_vs_ref_full_table$concordance_odd_ratio_HSO <- as.factor(fisher_test_alt_vs_ref_full_table$concordance_odd_ratio_HSO)
+# 
+# fisher_test_alt_vs_ref_full_table$qval_adj_combined_pvalue_101 <- qvalue(fisher_test_alt_vs_ref_full_table$combined_pval_101)$qvalues
+# fisher_test_alt_vs_ref_full_table$qval_adj_combined_pvalue_101_FDR_5 <- as.factor(qvalue(fisher_test_alt_vs_ref_full_table$combined_pval_101, fdr.level = 0.05)$significant)
+# fisher_test_alt_vs_ref_full_table$qval_adj_combined_pvalue_101_FDR_10 <- as.factor(qvalue(fisher_test_alt_vs_ref_full_table$combined_pval_101, fdr.level = 0.10)$significant)
+# fisher_test_alt_vs_ref_full_table$qval_adj_combined_pvalue_HSO <- qvalue(fisher_test_alt_vs_ref_full_table$combined_pval_HSO)$qvalues
+# fisher_test_alt_vs_ref_full_table$qval_adj_combined_pvalue_HSO_FDR_5 <- as.factor(qvalue(fisher_test_alt_vs_ref_full_table$combined_pval_HSO, fdr.level = 0.05)$significant)
+# fisher_test_alt_vs_ref_full_table$qval_adj_combined_pvalue_HSO_FDR_10 <- as.factor(qvalue(fisher_test_alt_vs_ref_full_table$combined_pval_HSO, fdr.level = 0.10)$significant)
 
-fisher_test_alt_vs_ref_full_table$qval_adj_combined_pvalue_101 <- qvalue(fisher_test_alt_vs_ref_full_table$adj_combined_pvalue_101)$qvalues
-fisher_test_alt_vs_ref_full_table$qval_adj_combined_pvalue_101_FDR_5 <- as.factor(qvalue(fisher_test_alt_vs_ref_full_table$adj_combined_pvalue_101, fdr.level = 0.05)$significant)
-fisher_test_alt_vs_ref_full_table$qval_adj_combined_pvalue_101_FDR_10 <- as.factor(qvalue(fisher_test_alt_vs_ref_full_table$adj_combined_pvalue_101, fdr.level = 0.10)$significant)
-fisher_test_alt_vs_ref_full_table$qval_adj_combined_pvalue_HSO <- qvalue(fisher_test_alt_vs_ref_full_table$adj_combined_pvalue_HSO)$qvalues
-fisher_test_alt_vs_ref_full_table$qval_adj_combined_pvalue_HSO_FDR_5 <- as.factor(qvalue(fisher_test_alt_vs_ref_full_table$adj_combined_pvalue_HSO, fdr.level = 0.05)$significant)
-fisher_test_alt_vs_ref_full_table$qval_adj_combined_pvalue_HSO_FDR_10 <- as.factor(qvalue(fisher_test_alt_vs_ref_full_table$adj_combined_pvalue_HSO, fdr.level = 0.10)$significant)
+fisher_test_alt_vs_ref_full_table[fisher_test_alt_vs_ref_full_table$adj_combined_pvalue_101==0, "adj_combined_pvalue_101"] <- 2.737124e-321
+fisher_test_alt_vs_ref_full_table[fisher_test_alt_vs_ref_full_table$adj_combined_pvalue_HSO==0, "adj_combined_pvalue_HSO"] <- 2.737124e-321
 ```
+
+In the table, adjusted p-value equal to *0* were replaced by *2.737124e-321*.
 
 ### Volcano plot
 
 The following volcano plots show the relation between the p-value and the odd ratio. The plots are splitted depending on the concordance of odd ratio. TRUE indicates concordants odd ratio, whereas FALSE indicante non concordant ones.
 
-```{r volcano_qval_oddratio_alt_vs_ref_no_location}
-ggplot(fisher_test_alt_vs_ref_full_table, aes(x = mean_odd_ratio_101, y = -log10(adj_combined_pvalue_101), color = concordance_odd_ratio_101)) + 
+```{r volcano_oddratio_alt_vs_ref_no_location}
+ggplot(fisher_test_alt_vs_ref_full_table, aes(x = log2(mean_odd_ratio_101), 
+       y = -log10(adj_combined_pvalue_101), color = concordance_odd_ratio_101)) + 
   geom_point() + 
   facet_wrap(~ concordance_odd_ratio_101) +
   ggtitle("Volcano plot of the -log10 of adjusted combined p-value for samples 101") + 
   ylab("-log10(adjusted combined p-value of Fisher test)") +
-  xlab("Mean odd ratio of Fisher test") + 
+  xlab("log2(Mean odd ratio of Fisher test)") + 
   labs(color = "Are odd ratio concordant") +
   scale_colour_discrete(labels = paste(levels(fisher_test_alt_vs_ref_full_table$concordance_odd_ratio_101), table(fisher_test_alt_vs_ref_full_table$concordance_odd_ratio_101)))
 
-ggplot(fisher_test_alt_vs_ref_full_table, aes(x = mean_odd_ratio_HSO, y = -log10(adj_combined_pvalue_101), color = concordance_odd_ratio_HSO)) + 
+ggplot(fisher_test_alt_vs_ref_full_table, aes(x = log2(mean_odd_ratio_HSO), y = -log10(adj_combined_pvalue_101), color = concordance_odd_ratio_HSO)) + 
   geom_point() + 
   facet_wrap(~ concordance_odd_ratio_HSO) +
   ggtitle("Volcano plot f the -log10 of adjusted combined p-value for samples HSO") + 
   ylab("-log10(adjusted combined p-value of Fisher test)") +
-  xlab("Mean odd ratio of Fisher test") + 
+  xlab("log2(Mean odd ratio of Fisher test)") + 
   labs(color = "Are odd ratio concordant") +
   scale_colour_discrete(labels = paste(levels(fisher_test_alt_vs_ref_full_table$concordance_odd_ratio_HSO), table(fisher_test_alt_vs_ref_full_table$concordance_odd_ratio_HSO)))
 ```
@@ -301,17 +317,18 @@ I created and exported a table containing all results for this pool of Fisher te
 * p-value of Fisher test of each sequence for each sample
 * Combined p-value using the Fisher method
 * Adjusted p-value of Fisher test using the Benjamini-Hochberg correction method for multiple testing
-* Combined adjusted p-value using the Fisher method
+* Combined p-value using the Fisher method
+* Adjusted combined p-value of Fisher test using the Benjamini-Hochberg correction method for multiple testing
+* A boolean column identifying significant sequences with a FDR of 5% or 10% (TRUE or FALSE).
 * The odd ratio of Fisher test for each sequence and each sample
 * A boolean column (TRUE of FALSE) for each sample indicating if odd ratio for both replicate are concordant (both < 1 or both = 1 or both > 1)
 * The mean odd ratio of each sample
-* Qvalue of combined adjusted p-value
-* A boolean column identifying significant sequences with a FDR of 5% or 10% (TRUE or FALSE).
 
 ```{r}
 write.csv(x = fisher_test_alt_vs_ref_full_table,
           file = "/data/nin/Workspace/Runs/Run_384/Tables/Table_Fisher_tests_chapter_2.5.csv", 
           row.names = TRUE)
+
 ```
 
 ### Table with some sequences having a significant regulatory effect
@@ -330,7 +347,7 @@ datatable(sample_101_significant_seq_combined_pval)
 #### Sample HSO
 
 ```{r}
-sample_HSO_significant_seq_combined_pval <- as.data.frame( rownames(fisher_test_alt_vs_ref_full_table[fisher_test_alt_vs_ref_full_table$adj_combined_pvalue_101 < 0.05,]))
+sample_HSO_significant_seq_combined_pval <- as.data.frame( rownames(fisher_test_alt_vs_ref_full_table[fisher_test_alt_vs_ref_full_table$adj_combined_pvalue_HSO < 0.05,]))
 colnames(sample_HSO_significant_seq_combined_pval) <- "significant_sequences"
 datatable(sample_HSO_significant_seq_combined_pval)
 
@@ -378,44 +395,44 @@ datatable(common_significant_seq_combined_pval)
 
 ### Qvalues
 
-I computed the qvalues of adjusted combined p-values for each samples. I draw the following histogram for each sample. I shows the distribution of adjusted combined p-value and draw a line for the qvalues and the local FDR. I also draw 2 volcano plots showing the relation between the p-value and the odd ratio. The plots are splitted depending on the significance of the qvalues. TRUE indicates a significant qvalue, whereas FALSE indicates non significant ones. I draw the plots using a FDR of 5% and 10%.
+I computed the qvalues of combined p-values for each samples. I draw the following histogram for each sample. I shows the distribution of adjusted combined p-value and draw a line for the qvalues and the local FDR. I also draw 2 volcano plots showing the relation between the p-value and the odd ratio. The plots are splitted depending on the significance of the qvalues. TRUE indicates a significant qvalue, whereas FALSE indicates non significant ones. I draw the plots using a FDR of 5% and 10%.
 
 #### Sample 101
 
 ```{r}
 # hist(qvalue(fisher_test_alt_vs_ref_full_table$adj_combined_pvalue_101))
 
-ggplot(fisher_test_alt_vs_ref_full_table, aes(x = mean_odd_ratio_101, y = -log10(adj_combined_pvalue_101), color = qval_adj_combined_pvalue_101_FDR_5)) + 
+ggplot(fisher_test_alt_vs_ref_full_table, aes(x = log2(mean_odd_ratio_101), y = -log10(adj_combined_pvalue_101), color = adj_combined_pvalue_101_FDR_5)) + 
   geom_point() + 
-  facet_wrap(~ qval_adj_combined_pvalue_101_FDR_5) +
+  facet_wrap(~ adj_combined_pvalue_101_FDR_5) +
   ggtitle("Volcano plot of the -log10 of adjusted combined p-value for samples 101") + 
   ylab("-log10(adjusted combined p-value of Fisher test)") +
-  xlab("Mean odd ratio of Fisher test") + 
+  xlab("log2(Mean odd ratio of Fisher test)") + 
   labs(color = "Is qvalue significant at FDR 5%?") +
-  scale_colour_discrete(labels = paste(levels(fisher_test_alt_vs_ref_full_table$qval_adj_combined_pvalue_101_FDR_5), table(fisher_test_alt_vs_ref_full_table$qval_adj_combined_pvalue_101_FDR_5)))
+  scale_colour_discrete(labels = paste(levels(fisher_test_alt_vs_ref_full_table$adj_combined_pvalue_101_FDR_5), table(fisher_test_alt_vs_ref_full_table$adj_combined_pvalue_101_FDR_5)))
 
-ggplot(fisher_test_alt_vs_ref_full_table, aes(x = mean_odd_ratio_101, y = -log10(adj_combined_pvalue_101), color = qval_adj_combined_pvalue_101_FDR_10)) + 
+ggplot(fisher_test_alt_vs_ref_full_table, aes(x = log2(mean_odd_ratio_101), y = -log10(adj_combined_pvalue_101), color = adj_combined_pvalue_101_FDR_10)) +
   geom_point() + 
-  facet_wrap(~ qval_adj_combined_pvalue_101_FDR_10) +
+  facet_wrap(~ adj_combined_pvalue_101_FDR_10) +
   ggtitle("Volcano plot of the -log10 of adjusted combined p-value for samples 101") + 
   ylab("-log10(adjusted combined p-value of Fisher test)") +
-  xlab("Mean odd ratio of Fisher test") + 
+  xlab("log2(Mean odd ratio of Fisher test)") + 
   labs(color = "Is qvalue significant at FDR 10%?") +
-  scale_colour_discrete(labels = paste(levels(fisher_test_alt_vs_ref_full_table$qval_adj_combined_pvalue_101_FDR_10), table(fisher_test_alt_vs_ref_full_table$qval_adj_combined_pvalue_101_FDR_10)))
+  scale_colour_discrete(labels = paste(levels(fisher_test_alt_vs_ref_full_table$adj_combined_pvalue_101_FDR_10), table(fisher_test_alt_vs_ref_full_table$adj_combined_pvalue_101_FDR_10)))
 ```
 
 ##### List of significant sequence with a 5% FDR
 
 ```{r}
-datatable(fisher_test_alt_vs_ref_full_table[fisher_test_alt_vs_ref_full_table$qval_adj_combined_pvalue_101_FDR_5 == TRUE, 
-                                            c("adj_combined_pvalue_101", "qval_adj_combined_pvalue_101")])
+datatable(fisher_test_alt_vs_ref_full_table[fisher_test_alt_vs_ref_full_table$adj_combined_pvalue_101_FDR_5 == TRUE, 
+                                            c("adj_combined_pvalue_101", "adj_combined_pvalue_101")])
 ```
 
 ##### List of significant sequence with a 10% FDR
 
 ```{r}
-datatable(fisher_test_alt_vs_ref_full_table[fisher_test_alt_vs_ref_full_table$qval_adj_combined_pvalue_101_FDR_10 == TRUE, 
-                                            c("adj_combined_pvalue_101", "qval_adj_combined_pvalue_101")])
+datatable(fisher_test_alt_vs_ref_full_table[fisher_test_alt_vs_ref_full_table$adj_combined_pvalue_101_FDR_10 == TRUE, 
+                                            c("adj_combined_pvalue_101", "adj_combined_pvalue_101")])
 ```
 
 #### Sample HSO
@@ -423,38 +440,38 @@ datatable(fisher_test_alt_vs_ref_full_table[fisher_test_alt_vs_ref_full_table$qv
 ```{r}
 # hist(qvalue(fisher_test_alt_vs_ref_full_table$adj_combined_pvalue_HSO))
 
-ggplot(fisher_test_alt_vs_ref_full_table, aes(x = mean_odd_ratio_HSO, y = -log10(adj_combined_pvalue_HSO), color = qval_adj_combined_pvalue_HSO_FDR_5)) + 
+ggplot(fisher_test_alt_vs_ref_full_table, aes(x = log2(mean_odd_ratio_HSO), y = -log10(adj_combined_pvalue_HSO), color = adj_combined_pvalue_HSO_FDR_5)) + 
   geom_point() + 
-  facet_wrap(~ qval_adj_combined_pvalue_HSO_FDR_5) +
+  facet_wrap(~ adj_combined_pvalue_HSO_FDR_5) +
   ggtitle("Volcano plot of the -log10 of adjusted combined p-value for samples HSO") + 
   ylab("-log10(adjusted combined p-value of Fisher test)") +
-  xlab("Mean odd ratio of Fisher test") + 
+  xlab("log2(Mean odd ratio of Fisher test)") + 
   labs(color = "Is qvalue significant at FDR 5%?") +
-  scale_colour_discrete(labels = paste(levels(fisher_test_alt_vs_ref_full_table$qval_adj_combined_pvalue_HSO_FDR_5), table(fisher_test_alt_vs_ref_full_table$qval_adj_combined_pvalue_HSO_FDR_5)))
+  scale_colour_discrete(labels = paste(levels(fisher_test_alt_vs_ref_full_table$adj_combined_pvalue_HSO_FDR_5), table(fisher_test_alt_vs_ref_full_table$adj_combined_pvalue_HSO_FDR_5)))
 
-ggplot(fisher_test_alt_vs_ref_full_table, aes(x = mean_odd_ratio_HSO, y = -log10(adj_combined_pvalue_HSO), color = qval_adj_combined_pvalue_HSO_FDR_10)) + 
+ggplot(fisher_test_alt_vs_ref_full_table, aes(x = log2(mean_odd_ratio_HSO), y = -log10(adj_combined_pvalue_HSO), color = adj_combined_pvalue_HSO_FDR_10)) +
   geom_point() + 
-  facet_wrap(~ qval_adj_combined_pvalue_HSO_FDR_10) +
+  facet_wrap(~ adj_combined_pvalue_HSO_FDR_10) +
   ggtitle("Volcano plot of the -log10 of adjusted combined p-value for samples HSO") + 
   ylab("-log10(adjusted combined p-value of Fisher test)") +
-  xlab("Mean odd ratio of Fisher test") + 
+  xlab("log2(Mean odd ratio of Fisher test)") + 
   labs(color = "Is qvalue significant at FDR 10%?") +
-  scale_colour_discrete(labels = paste(levels(fisher_test_alt_vs_ref_full_table$qval_adj_combined_pvalue_HSO_FDR_10), table(fisher_test_alt_vs_ref_full_table$qval_adj_combined_pvalue_HSO_FDR_10)))
+  scale_colour_discrete(labels = paste(levels(fisher_test_alt_vs_ref_full_table$adj_combined_pvalue_HSO_FDR_10), table(fisher_test_alt_vs_ref_full_table$adj_combined_pvalue_HSO_FDR_10)))
 ```
 
 
 ##### List of significant sequence with a 5% FDR
 
 ```{r}
-datatable(fisher_test_alt_vs_ref_full_table[fisher_test_alt_vs_ref_full_table$qval_adj_combined_pvalue_HSO_FDR_5 == TRUE, 
-                                            c("adj_combined_pvalue_HSO", "qval_adj_combined_pvalue_HSO")])
+datatable(fisher_test_alt_vs_ref_full_table[fisher_test_alt_vs_ref_full_table$adj_combined_pvalue_HSO_FDR_5 == TRUE, 
+                                            c("adj_combined_pvalue_HSO", "adj_combined_pvalue_HSO")])
 ```
 
 ##### List of significant sequence with a 10% FDR
 
 ```{r}
-datatable(fisher_test_alt_vs_ref_full_table[fisher_test_alt_vs_ref_full_table$qval_adj_combined_pvalue_HSO_FDR_10 == TRUE, 
-                                            c("adj_combined_pvalue_HSO", "qval_adj_combined_pvalue_HSO")])
+datatable(fisher_test_alt_vs_ref_full_table[fisher_test_alt_vs_ref_full_table$adj_combined_pvalue_HSO_FDR_10 == TRUE, 
+                                            c("adj_combined_pvalue_HSO", "adj_combined_pvalue_HSO")])
 ```
 
 #### Venn diagrams with qvalues
@@ -462,12 +479,12 @@ datatable(fisher_test_alt_vs_ref_full_table[fisher_test_alt_vs_ref_full_table$qv
 ##### FDR 5%
 
 ```{r}
-sample_101_significant_seq_qval <- as.data.frame( rownames(fisher_test_alt_vs_ref_full_table[fisher_test_alt_vs_ref_full_table$qval_adj_combined_pvalue_101_FDR_5 == TRUE, 
-                                            c("adj_combined_pvalue_101", "qval_adj_combined_pvalue_101")]))
+sample_101_significant_seq_qval <- as.data.frame( rownames(fisher_test_alt_vs_ref_full_table[fisher_test_alt_vs_ref_full_table$adj_combined_pvalue_101_FDR_5 == TRUE, 
+                                            c("adj_combined_pvalue_101", "adj_combined_pvalue_101")]))
 colnames(sample_101_significant_seq_qval) <- "significant_sequences_with_FDR_5"
 
-sample_HSO_significant_seq_qval <- as.data.frame( rownames(fisher_test_alt_vs_ref_full_table[fisher_test_alt_vs_ref_full_table$qval_adj_combined_pvalue_HSO_FDR_5 == TRUE, 
-                                            c("adj_combined_pvalue_HSO", "qval_adj_combined_pvalue_HSO")]))
+sample_HSO_significant_seq_qval <- as.data.frame( rownames(fisher_test_alt_vs_ref_full_table[fisher_test_alt_vs_ref_full_table$adj_combined_pvalue_HSO_FDR_5 == TRUE, 
+                                            c("adj_combined_pvalue_HSO", "adj_combined_pvalue_HSO")]))
 colnames(sample_HSO_significant_seq_qval) <- "significant_sequences_with_FDR_5"
 
 display_venn(
@@ -500,12 +517,12 @@ datatable(common_significant_seq_combined_pval)
 ##### FDR 10%
 
 ```{r}
-sample_101_significant_seq_qval <- as.data.frame( rownames(fisher_test_alt_vs_ref_full_table[fisher_test_alt_vs_ref_full_table$qval_adj_combined_pvalue_101_FDR_10 == TRUE, 
-                                            c("adj_combined_pvalue_101", "qval_adj_combined_pvalue_101")]))
+sample_101_significant_seq_qval <- as.data.frame( rownames(fisher_test_alt_vs_ref_full_table[fisher_test_alt_vs_ref_full_table$adj_combined_pvalue_101_FDR_10 == TRUE, 
+                                            c("adj_combined_pvalue_101", "adj_combined_pvalue_101")]))
 colnames(sample_101_significant_seq_qval) <- "significant_sequences_with_FDR_10"
 
-sample_HSO_significant_seq_qval <- as.data.frame( rownames(fisher_test_alt_vs_ref_full_table[fisher_test_alt_vs_ref_full_table$qval_adj_combined_pvalue_HSO_FDR_10 == TRUE, 
-                                            c("adj_combined_pvalue_HSO", "qval_adj_combined_pvalue_HSO")]))
+sample_HSO_significant_seq_qval <- as.data.frame( rownames(fisher_test_alt_vs_ref_full_table[fisher_test_alt_vs_ref_full_table$adj_combined_pvalue_HSO_FDR_10 == TRUE, 
+                                            c("adj_combined_pvalue_HSO", "adj_combined_pvalue_HSO")]))
 colnames(sample_HSO_significant_seq_qval) <- "significant_sequences_with_FDR_10"
 
 display_venn(
